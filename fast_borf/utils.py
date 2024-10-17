@@ -1,10 +1,12 @@
+import math
+from typing import Iterable, Union
+
+import awkward as ak
 import numba as nb
 import numpy as np
-from numba import njit, vectorize, set_num_threads
-import math
-import awkward as ak
-from typing import Union, Iterable
 import psutil
+from numba import njit, set_num_threads, vectorize
+
 from fast_borf.constants import HASHMAP_2_SYMBOLS, NORM_BINS_DICT
 
 
@@ -46,8 +48,19 @@ def get_norm_bins(alphabet_size: int, mu=0, std=1) -> np.ndarray:
     return ppf(np.linspace(0, 1, alphabet_size + 1)[1:-1], mu, std)
 
 
+@njit(cache=True)
+def get_norm_bins_OUTLIER_Q(
+    alphabet_size: int, mu=0, std=1, q: float = 0.01
+) -> np.ndarray:
+    bin_lin = np.linspace(0, 1, alphabet_size + 1)[1:-1]
+    bin_lin = np.concatenate([[q], bin_lin, [1 - q]])
+    return ppf(bin_lin, mu, std)
+
+
 @njit
-def get_cached_norm_bins(alphabet_size: int, bins=NORM_BINS_DICT) -> np.ndarray:
+def get_cached_norm_bins(
+    alphabet_size: int, bins=NORM_BINS_DICT
+) -> np.ndarray:
     return bins[alphabet_size - 2]
 
 
@@ -89,7 +102,9 @@ def is_window_size_less_than_word_length(window_size, word_length):
 
 
 @njit(fastmath=True, cache=True)
-def are_window_size_and_dilation_compatible_with_signal_length(window_size, dilation, signal_length):
+def are_window_size_and_dilation_compatible_with_signal_length(
+    window_size, dilation, signal_length
+):
     if window_size + (window_size - 1) * (dilation - 1) <= signal_length:
         return True
     else:
@@ -97,7 +112,9 @@ def are_window_size_and_dilation_compatible_with_signal_length(window_size, dila
 
 
 @njit(cache=True)
-def is_window_size_less_or_equal_than_signal_length(window_size, signal_length):
+def is_window_size_less_or_equal_than_signal_length(
+    window_size, signal_length
+):
     return window_size <= signal_length
 
 
@@ -114,7 +131,9 @@ def check_window_size_word_length(window_size, word_length):
 
 def check_alphabet_size(alphabet_size):
     if not is_alphabet_size_valid(alphabet_size):
-        raise ValueError(f"alphabet_size ({alphabet_size}) must be greater than 1")
+        raise ValueError(
+            f"alphabet_size ({alphabet_size}) must be greater than 1"
+        )
 
 
 def check_alphabet_sizes(alphabet_size_mean, alphabet_size_slope):
@@ -151,7 +170,9 @@ def check_X(X: Iterable):
 
 
 @njit(cache=True)
-def is_valid_windowing(sequence_size: int, window_size: int, dilation: int) -> bool:
+def is_valid_windowing(
+    sequence_size: int, window_size: int, dilation: int
+) -> bool:
     if (
         sequence_size < window_size * dilation
     ):  # if window_size * dilation exceeds the length of the sequence
@@ -183,7 +204,15 @@ def generate_index(panel):
 
 @njit(fastmath=True, cache=True)
 def get_n_windows(sequence_size, window_size, dilation=1, stride=1, padding=0):
-    return 1 + math.floor((sequence_size + 2 * padding - window_size - (dilation - 1) * (window_size - 1)) / stride)
+    return 1 + math.floor(
+        (
+            sequence_size
+            + 2 * padding
+            - window_size
+            - (dilation - 1) * (window_size - 1)
+        )
+        / stride
+    )
 
 
 @nb.njit(cache=True)
@@ -224,9 +253,10 @@ def convert_to_base_l_minus_one(number, base, word_length):
         digit = number % (word_length - 1)
         result += digit * multiplier
         multiplier *= base
-        number //= (word_length - 1)
+        number //= word_length - 1
 
     return result
+
 
 @nb.njit(fastmath=True, cache=True)
 def count_digits(number):
